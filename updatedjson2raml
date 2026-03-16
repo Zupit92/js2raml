@@ -1,0 +1,113 @@
+const fs = require("fs");
+
+const TAB = "  ";
+const LE = "\n";
+const HEADER = "#%RAML 1.0 DataType" + LE;
+
+function detectType(value) {
+
+  if (Array.isArray(value)) return "array";
+  if (value === null) return "nil";
+
+  switch (typeof value) {
+    case "string": return "string";
+    case "number":
+      return Number.isInteger(value) ? "integer" : "number";
+    case "boolean": return "boolean";
+    case "object": return "object";
+    default: return "any";
+  }
+}
+
+function convertJSON(json) {
+
+  let raml = HEADER;
+
+  if (Array.isArray(json)) {
+
+    raml += "type: array" + LE;
+    raml += "items:" + LE;
+    raml += buildNode(json[0], 1);
+
+  } else {
+
+    raml += "type: object" + LE;
+    raml += "properties:" + LE;
+
+    for (let key in json) {
+      raml += buildProperty(key, json[key], 1);
+    }
+  }
+
+  return raml;
+}
+
+function buildProperty(key, value, level) {
+
+  let raml = "";
+
+  raml += getTabs(level) + key + ":" + LE;
+
+  const type = detectType(value);
+
+  raml += getTabs(level + 1) + "type: " + type + LE;
+  raml += getTabs(level + 1) + "required: false" + LE;
+
+  if (type !== "object" && type !== "array") {
+    raml += getTabs(level + 1) + "example: " + JSON.stringify(value) + LE;
+  }
+
+  if (type === "object") {
+
+    raml += getTabs(level + 1) + "properties:" + LE;
+
+    for (let k in value) {
+      raml += buildProperty(k, value[k], level + 2);
+    }
+  }
+
+  if (type === "array") {
+
+    if (value.length > 0) {
+
+      const itemType = detectType(value[0]);
+
+      if (itemType === "object") {
+
+        raml += getTabs(level + 1) + "items:" + LE;
+        raml += getTabs(level + 2) + "type: object" + LE;
+        raml += getTabs(level + 2) + "properties:" + LE;
+
+        for (let k in value[0]) {
+          raml += buildProperty(k, value[0][k], level + 3);
+        }
+
+      } else {
+
+        raml += getTabs(level + 1) + "items: " + itemType + LE;
+
+      }
+
+      raml += getTabs(level + 1) + "example: " + JSON.stringify(value) + LE;
+    }
+  }
+
+  return raml;
+}
+
+function getTabs(level) {
+  return TAB.repeat(level);
+}
+
+//// MAIN
+
+const inputFile = "input.json";
+const outputFile = "output.raml";
+
+const jsonData = JSON.parse(fs.readFileSync(inputFile, "utf8"));
+
+const ramlOutput = convertJSON(jsonData);
+
+fs.writeFileSync(outputFile, ramlOutput);
+
+console.log("✅ RAML file generated -> output.raml");
