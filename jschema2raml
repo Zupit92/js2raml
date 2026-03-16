@@ -1,0 +1,113 @@
+const fs = require("fs");
+
+const TAB = "  ";
+const LE = "\n";
+const HEADER = "#%RAML 1.0 DataType" + LE;
+
+function mapType(type) {
+  switch (type) {
+    case "string": return "string";
+    case "integer": return "integer";
+    case "number": return "number";
+    case "boolean": return "boolean";
+    case "array": return "array";
+    case "object": return "object";
+    default: return "any";
+  }
+}
+
+function convertSchema(schema) {
+
+  let output = HEADER;
+
+  output += "type: " + mapType(schema.type) + LE;
+
+  if (schema.description) {
+    output += "description: " + schema.description + LE;
+  }
+
+  if (schema.properties) {
+    output += "properties:" + LE;
+    output += buildProperties(schema.properties, schema.required || [], 1);
+  }
+
+  return output;
+}
+
+function buildProperties(properties, requiredList, level) {
+
+  let result = "";
+
+  for (let key in properties) {
+
+    const prop = properties[key];
+    result += getTabs(level) + key + ":" + LE;
+
+    result += getTabs(level + 1) + "type: " + mapType(prop.type) + LE;
+
+    if (requiredList.includes(key)) {
+      result += getTabs(level + 1) + "required: true" + LE;
+    }
+
+    if (prop.description) {
+      result += getTabs(level + 1) + "description: \"" + prop.description + "\"" + LE;
+    }
+
+    if (prop.example !== undefined) {
+      result += getTabs(level + 1) + "example: " + JSON.stringify(prop.example) + LE;
+    }
+
+    if (prop.minLength !== undefined) {
+      result += getTabs(level + 1) + "minLength: " + prop.minLength + LE;
+    }
+
+    if (prop.minimum !== undefined) {
+      result += getTabs(level + 1) + "minimum: " + prop.minimum + LE;
+    }
+
+    if (prop.pattern !== undefined) {
+      result += getTabs(level + 1) + "pattern: \"" + prop.pattern + "\"" + LE;
+    }
+
+    if (prop.type === "object" && prop.properties) {
+
+      result += getTabs(level + 1) + "properties:" + LE;
+      result += buildProperties(
+        prop.properties,
+        prop.required || [],
+        level + 2
+      );
+
+    }
+
+    if (prop.type === "array") {
+
+      if (prop.items && prop.items.type) {
+        result += getTabs(level + 1) + "items: " + mapType(prop.items.type) + LE;
+      }
+
+      if (prop.example) {
+        result += getTabs(level + 1) + "example: " + JSON.stringify(prop.example) + LE;
+      }
+    }
+  }
+
+  return result;
+}
+
+function getTabs(level) {
+  return TAB.repeat(level);
+}
+
+//// RUN SCRIPT
+
+const inputFile = "input-schema.json";
+const outputFile = "output.raml";
+
+const schema = JSON.parse(fs.readFileSync(inputFile, "utf8"));
+
+const raml = convertSchema(schema);
+
+fs.writeFileSync(outputFile, raml);
+
+console.log("✅ RAML generated successfully -> output.raml");
